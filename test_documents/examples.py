@@ -1,11 +1,5 @@
-"""
-简单使用示例
-"""
-
 # 示例1: 基本问答
 def example_basic_qa():
-    """基本问答示例"""
-    from config import Config
     from vector_store_manager import VectorStoreManager
     from rag_chain import RAGChain
     
@@ -26,7 +20,6 @@ def example_basic_qa():
 
 # 示例2: 获取详细信息
 def example_detailed_qa():
-    """获取详细信息示例"""
     from vector_store_manager import VectorStoreManager
     from rag_chain import RAGChain
     
@@ -48,7 +41,6 @@ def example_detailed_qa():
 
 # 示例3: 多轮对话
 def example_conversation():
-    """多轮对话示例"""
     from vector_store_manager import VectorStoreManager
     from rag_chain import RAGChain
     
@@ -72,7 +64,6 @@ def example_conversation():
 
 # 示例4: 流式输出
 def example_streaming():
-    """流式输出示例"""
     from vector_store_manager import VectorStoreManager
     from rag_chain import RAGChain
     
@@ -93,7 +84,6 @@ def example_streaming():
 
 # 示例5: 批量处理
 def example_batch_processing():
-    """批量处理示例"""
     import json
     from vector_store_manager import VectorStoreManager
     from rag_chain import RAGChain
@@ -128,9 +118,8 @@ def example_batch_processing():
 
 
 if __name__ == "__main__":
-    print("请先运行: python init_kb.py 初始化知识库\n")
-    print("然后取消注释下面的示例运行：\n")
     
+    # 注意：先运行: python init_kb.py 初始化知识库，然后再执行本文件
     example_basic_qa()
     example_detailed_qa()
     example_conversation()

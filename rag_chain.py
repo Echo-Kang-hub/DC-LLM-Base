@@ -1,6 +1,3 @@
-"""
-RAG链模块 - 实现检索增强生成
-"""
 from typing import List, Dict, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -12,15 +9,8 @@ from vector_store_manager import VectorStoreManager
 
 
 class RAGChain:
-    """RAG问答链"""
-    
     def __init__(self, vector_store_manager: VectorStoreManager):
-        """
-        初始化RAG链
-        
-        Args:
-            vector_store_manager: 向量存储管理器
-        """
+
         self.vector_store_manager = vector_store_manager
         
         # 初始化LLM
@@ -47,7 +37,7 @@ class RAGChain:
         
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
-            MessagesPlaceholder(variable_name="chat_history", optional=True),
+            MessagesPlaceholder(variable_name="chat_history", optional=True), # 添加历史对话
             ("human", "{question}")
         ])
         
@@ -57,24 +47,16 @@ class RAGChain:
         # 对话历史
         self.chat_history: List[Any] = []
     
-    def _format_docs(self, docs):
-        """格式化文档"""
+    # 格式化：文档拼接
+    def format_docs(self, docs):
         return "\n\n".join(doc.page_content for doc in docs)
     
+    # 调用RAG链回答问题 Args:question: 用户问题 use_history: 是否使用对话历史 Returns:包含答案和上下文的字典
     def invoke(self, question: str, use_history: bool = True) -> Dict[str, Any]:
-        """
-        调用RAG链回答问题
-        
-        Args:
-            question: 用户问题
-            use_history: 是否使用对话历史
-            
-        Returns:
-            包含答案和上下文的字典
-        """
+
         # 检索相关文档
         retrieved_docs = self.retriever.invoke(question)
-        context = self._format_docs(retrieved_docs)
+        context = self.format_docs(retrieved_docs)
         
         # 准备消息
         messages = [
@@ -109,29 +91,13 @@ class RAGChain:
             "input": question
         }
     
+    # 获取问题答案 Args:question: 用户问题 Returns:答案字符串
     def get_answer(self, question: str) -> str:
-        """
-        获取问题答案（简化版）
-        
-        Args:
-            question: 用户问题
-            
-        Returns:
-            答案字符串
-        """
         response = self.invoke(question)
         return response["answer"]
     
+    # 获取答案和来源文档 Args:question: 用户问题 Returns:包含答案和来源的字典
     def get_answer_with_sources(self, question: str) -> Dict[str, Any]:
-        """
-        获取答案和来源文档
-        
-        Args:
-            question: 用户问题
-            
-        Returns:
-            包含答案和来源的字典
-        """
         response = self.invoke(question)
         
         return {
@@ -140,26 +106,18 @@ class RAGChain:
             "question": question
         }
     
+    # 清除对话历史
     def clear_history(self):
-        """清除对话历史"""
         self.chat_history = []
         print("对话历史已清除")
     
+    # 流式回答问题 Args:question: 用户问题 Yields:答案片段
     def stream_answer(self, question: str):
-        """
-        流式回答问题
-        
-        Args:
-            question: 用户问题
-            
-        Yields:
-            答案片段
-        """
         # 获取相关文档
         docs = self.retriever.invoke(question)
         
         # 准备上下文
-        context = self._format_docs(docs)
+        context = self.format_docs(docs)
         
         # 准备消息
         messages = [

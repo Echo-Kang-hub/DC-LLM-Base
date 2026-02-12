@@ -1,7 +1,3 @@
-"""
-RAG系统实验脚本 - 用于测试各种优化方案
-包含：Chunk Size对比、Re-ranking、Query Rewriting等实验
-"""
 import json
 import time
 import pandas as pd
@@ -17,31 +13,26 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 class RAGExperiments:
-    """RAG系统实验类"""
-    
     def __init__(self):
         self.knowledge_base_path = Config.KNOWLEDGE_BASE_PATH
         self.test_questions_path = 'test_question.json'
         self.results = []
         
+    # 加载测试问题
     def load_test_questions(self, limit=10) -> List[Dict]:
-        """加载测试问题"""
         with open(self.test_questions_path, 'r', encoding='utf-8') as f:
             questions = json.load(f)
         return questions[:limit]
     
     # ==================== 实验1: Chunk Size对比 ====================
     
+    # 实验1：测试不同的Chunk Size对检索效果的影响
     def experiment_chunk_size(self):
-        """
-        实验1：测试不同的Chunk Size对检索效果的影响
-        测试参数：500, 1000, 1500, 2000
-        """
         print("\n" + "="*60)
         print("🔬 实验1: Chunk Size对比实验")
         print("="*60)
         
-        chunk_sizes = [500, 1000, 1500, 2000]
+        chunk_sizes = [256,512,1024]
         test_questions = self.load_test_questions(limit=5)
         results = []
         
@@ -52,7 +43,7 @@ class RAGExperiments:
             # 重新处理文档
             doc_processor = DocumentProcessor(
                 chunk_size=chunk_size,
-                chunk_overlap=200
+                chunk_overlap=50
             )
             splits = doc_processor.process_pdf(self.knowledge_base_path)
             
@@ -115,23 +106,34 @@ class RAGExperiments:
     
     # ==================== 实验2: Re-ranking (重排序) ====================
     
-    def experiment_reranking(self):
+    def experiment_reranking(self, use_best_chunk_size=True):
         """
         实验2：测试Re-ranking对检索结果的优化
-        方法：使用LLM对检索结果进行相关性重排序
+        方法：使用LLM对检索结果进行相关性重排序（采用逐个评分方法）
+        
+        Args:
+            use_best_chunk_size: 是否使用最佳chunk_size=1024重建向量库
         """
         print("\n" + "="*60)
         print("🔬 实验2: Re-ranking (重排序) 实验")
         print("="*60)
         
-        # 加载向量存储
-        vector_store_manager = VectorStoreManager()
-        vector_store_manager.load_vector_store()
+        # 如果需要使用最佳chunk_size，先重建向量库
+        if use_best_chunk_size:
+            print("\n📏 使用最佳 Chunk Size = 1024 重建向量库")
+            doc_processor = DocumentProcessor(chunk_size=1024, chunk_overlap=200)
+            splits = doc_processor.process_pdf(self.knowledge_base_path)
+            vector_store_manager = VectorStoreManager()
+            vector_store_manager.create_vector_store(splits)
+        else:
+            # 加载现有向量存储
+            vector_store_manager = VectorStoreManager()
+            vector_store_manager.load_vector_store()
         
         # 初始化LLM用于重排序
         llm = ChatOpenAI(
             model=Config.OPENAI_MODEL,
-            temperature=0,
+            temperature=0,  # 温度=0确保评分稳定
             openai_api_key=Config.OPENAI_API_KEY,
             openai_api_base=Config.OPENAI_API_BASE
         )
@@ -149,9 +151,9 @@ class RAGExperiments:
             docs_original = vector_store_manager.similarity_search(question, k=10)
             time_original = time.time() - start_time
             
-            # 2. 使用LLM进行Re-ranking
+            # 2. 使用LLM进行Re-ranking（采用老师的逐个评分方法）
             start_time = time.time()
-            docs_reranked = self._rerank_documents(question, docs_original, llm, top_k=4)
+            docs_reranked = self._rerank_documents_teacher_method(question, docs_original, llm, top_k=3)
             time_reranked = time.time() - start_time
             
             # 3. 分别生成答案
@@ -299,7 +301,7 @@ class RAGExperiments:
             
             # 2. 使用原始问题检索
             start_time = time.time()
-            docs_original = vector_store_manager.similarity_search(original_question, k=4)
+            docs_original = vector_store_manager.similarity_search(original_question, k=5)
             time_original = time.time() - start_time
             answer_original = self._get_answer_from_docs(original_question, docs_original, llm)
             
@@ -308,7 +310,7 @@ class RAGExperiments:
             docs_rewritten = self._multi_query_retrieval(
                 rewritten_queries, 
                 vector_store_manager, 
-                k=4
+                k=5
             )
             time_rewritten = time.time() - start_time
             answer_rewritten = self._get_answer_from_docs(original_question, docs_rewritten, llm)

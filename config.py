@@ -1,6 +1,3 @@
-"""
-配置文件 - 存储所有系统配置参数
-"""
 import os
 from dotenv import load_dotenv
 
@@ -9,8 +6,7 @@ load_dotenv()
 
 
 class Config:
-    """系统配置类"""
-    
+
     # OpenAI配置
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
@@ -38,13 +34,13 @@ class Config:
     # 温度参数
     TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
     
-    @classmethod
+
+    @classmethod # 验证必要配置是否存在
     def validate(cls):
-        """验证必要的配置是否存在"""
-        # 如果使用远程 Embedding，需要 API Key
+        # 使用远程 Embedding 但没有 API Key
         if not cls.USE_LOCAL_EMBEDDING and not cls.OPENAI_API_KEY:
-            raise ValueError("使用远程 Embedding 需要设置 OPENAI_API_KEY 环境变量")
-        # 如果使用远程 LLM，需要 API Key
+            raise ValueError("使用远程 Embedding 但没有设置 OPENAI_API_KEY 环境变量")
+        # 使用远程 LLM 但没有 API Key
         if not cls.OPENAI_API_KEY:
-            print("⚠️  未设置 OPENAI_API_KEY，将只能使用本地 Embedding，无法进行问答")
+            print("使用远程 LLM 但没有设置 OPENAI_API_KEY 环境变量")
         return True
