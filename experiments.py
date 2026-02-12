@@ -121,7 +121,7 @@ class RAGExperiments:
         # 如果需要使用最佳chunk_size，先重建向量库
         if use_best_chunk_size:
             print("\n📏 使用最佳 Chunk Size = 1024 重建向量库")
-            doc_processor = DocumentProcessor(chunk_size=1024, chunk_overlap=200)
+            doc_processor = DocumentProcessor(chunk_size=1024, chunk_overlap=50)
             splits = doc_processor.process_pdf(self.knowledge_base_path)
             vector_store_manager = VectorStoreManager()
             vector_store_manager.create_vector_store(splits)
@@ -187,9 +187,63 @@ class RAGExperiments:
         print(f"\n✅ 实验完成！结果已保存到: {output_file}")
         return df
     
-    def _rerank_documents(self, query: str, documents: List, llm, top_k: int = 4) -> List:
-        """使用LLM对文档进行重排序"""
+    def _rerank_documents_teacher_method(self, query: str, documents: List, llm, top_k: int = 3) -> List:
+        """使用LLM对文档进行重排序（采用老师的逐个评分方法，避免幻觉）
         
+        优点：
+        1. 逐个文档单独评分，LLM关注度更高
+        2. 使用完整文档内容，评分更准确
+        3. 输出简单数字，解析稳定
+        4. 温度=0，评分一致性高
+        """
+        scored_docs = []
+        
+        for i, doc in enumerate(documents):
+            # 为每个文档单独调用LLM评分
+            prompt = f"""请评估以下文档与问题的相关性，给出1-10的评分。
+只输出数字评分，不要其他内容。
+
+问题：{query}
+文档：{doc.page_content}
+
+相关性评分："""
+            
+            try:
+                response = llm.invoke(prompt)
+                # 提取数字评分
+                score_text = response.content.strip()
+                # 尝试提取第一个数字
+                import re
+                match = re.search(r'(\d+)', score_text)
+                if match:
+                    score = int(match.group(1))
+                    # 限制在1-10范围内
+                    score = max(1, min(10, score))
+                else:
+                    score = 5  # 默认中等分数
+                
+                scored_docs.append((doc, score))
+                print(f"    文档 {i+1}/{len(documents)}: 评分 {score}")
+                
+            except Exception as e:
+                print(f"    ⚠️  文档 {i+1} 评分失败: {e}")
+                scored_docs.append((doc, 5))  # 失败时给默认分
+        
+        # 按分数降序排列，取top_k
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+        
+        print(f"\n  🏆 Top {top_k} 分数: {[score for _, score in scored_docs[:top_k]]}")
+        
+        return [doc for doc, score in scored_docs[:top_k]]
+    
+    def _rerank_documents(self, query: str, documents: List, llm, top_k: int = 4) -> List:
+        """使用LLM对文档进行重排序（旧方法，已废弃）
+        
+        问题：
+        1. 批量评分容易混淆
+        2. 只用了前200字符，信息不完整导致幻觉
+        3. JSON解析不稳定
+        """
         # 创建重排序提示
         rerank_prompt = ChatPromptTemplate.from_messages([
             ("system", """你是一个文档相关性评分专家。请根据用户问题，给每个文档的相关性打分(0-10分)。
