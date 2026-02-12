@@ -5,7 +5,7 @@ langchain-openai>=0.2.0
 langchain-text-splitters>=0.3.8
 langchain-core>=0.3.0
 
-# 向量存储
+# 向量存储（Windows上faiss-gpu不可用，使用faiss-cpu）
 faiss-cpu>=1.8.0
 
 # PDF处理

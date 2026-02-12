@@ -23,9 +23,10 @@ class VectorStoreManager:
         # 初始化Embeddings - 支持本地和远程
         if Config.USE_LOCAL_EMBEDDING:
             print(f"使用本地 Embedding 模型: {Config.LOCAL_EMBEDDING_MODEL}")
+            print(f"使用设备: {Config.EMBEDDING_DEVICE}")
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=Config.LOCAL_EMBEDDING_MODEL,
-                model_kwargs={'device': 'cpu'},
+                model_kwargs={'device': Config.EMBEDDING_DEVICE},
                 encode_kwargs={'normalize_embeddings': True}
             )
         else:

@@ -16,6 +16,7 @@ class Config:
     USE_LOCAL_EMBEDDING = os.getenv("USE_LOCAL_EMBEDDING", "true").lower() == "true"
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
     LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+    EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")  # cpu 或 cuda
     
     # 文本分割配置
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
