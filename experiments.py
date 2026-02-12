@@ -120,7 +120,7 @@ class RAGExperiments:
         
         # 如果需要使用最佳chunk_size，先重建向量库
         if use_best_chunk_size:
-            print("\n📏 使用最佳 Chunk Size = 1024 重建向量库")
+            print("\n📏 使用最佳 Chunk Size = 1024, Overlap = 50 重建向量库")
             doc_processor = DocumentProcessor(chunk_size=1024, chunk_overlap=50)
             splits = doc_processor.process_pdf(self.knowledge_base_path)
             vector_store_manager = VectorStoreManager()
@@ -318,18 +318,29 @@ class RAGExperiments:
     
     # ==================== 实验3: Query Rewriting (查询改写) ====================
     
-    def experiment_query_rewriting(self):
+    def experiment_query_rewriting(self, use_best_chunk_size=True):
         """
         实验3：测试Query Rewriting对检索效果的提升
         方法：使用LLM改写用户查询，使其更适合检索
+        
+        Args:
+            use_best_chunk_size: 是否使用最佳chunk_size=1024, chunk_overlap=50重建向量库
         """
         print("\n" + "="*60)
         print("🔬 实验3: Query Rewriting (查询改写) 实验")
         print("="*60)
         
-        # 加载向量存储
-        vector_store_manager = VectorStoreManager()
-        vector_store_manager.load_vector_store()
+        # 如果需要使用最佳chunk_size，先重建向量库（控制变量）
+        if use_best_chunk_size:
+            print("\n📏 使用最佳 Chunk Size = 1024, Overlap = 50 重建向量库")
+            doc_processor = DocumentProcessor(chunk_size=1024, chunk_overlap=50)
+            splits = doc_processor.process_pdf(self.knowledge_base_path)
+            vector_store_manager = VectorStoreManager()
+            vector_store_manager.create_vector_store(splits)
+        else:
+            # 加载现有向量存储
+            vector_store_manager = VectorStoreManager()
+            vector_store_manager.load_vector_store()
         
         # 初始化LLM
         llm = ChatOpenAI(
