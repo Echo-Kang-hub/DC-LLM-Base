@@ -9,9 +9,14 @@ from vector_store_manager import VectorStoreManager
 
 
 class RAGChain:
-    def __init__(self, vector_store_manager: VectorStoreManager):
-
+    def __init__(self, vector_store_manager: VectorStoreManager, retrieval_k: int = None):
+        """
+        Args:
+            vector_store_manager: 向量存储管理器
+            retrieval_k: 检索文档数量，默认使用Config.RETRIEVAL_K
+        """
         self.vector_store_manager = vector_store_manager
+        self.retrieval_k = retrieval_k or Config.RETRIEVAL_K
         
         # 初始化LLM
         self.llm = ChatOpenAI(
@@ -41,8 +46,8 @@ class RAGChain:
             ("human", "{question}")
         ])
         
-        # 创建检索器
-        self.retriever = self.vector_store_manager.get_retriever()
+        # 创建检索器（使用自定义k）
+        self.retriever = self.vector_store_manager.get_retriever(k=self.retrieval_k)
         
         # 对话历史
         self.chat_history: List[Any] = []

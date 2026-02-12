@@ -27,9 +27,14 @@ class RAGExperiments:
     # ==================== 实验1: Chunk Size对比 ====================
     
     # 实验1：测试不同的Chunk Size对检索效果的影响
-    def experiment_chunk_size(self):
+    def experiment_chunk_size(self, retrieval_k=3):
+        """
+        Args:
+            retrieval_k: 检索文档数量，默认k=3
+        """
         print("\n" + "="*60)
         print("🔬 实验1: Chunk Size对比实验")
+        print(f"📊 检索文档数 k = {retrieval_k}")
         print("="*60)
         
         chunk_sizes = [256,512,1024]
@@ -52,7 +57,7 @@ class RAGExperiments:
             vector_store_manager.create_vector_store(splits)
             
             # 创建RAG链
-            rag_chain = RAGChain(vector_store_manager)
+            rag_chain = RAGChain(vector_store_manager, retrieval_k=retrieval_k)
             
             # 测试每个问题
             for q in test_questions:
@@ -67,6 +72,7 @@ class RAGExperiments:
                     
                     result = {
                         'chunk_size': chunk_size,
+                        'retrieval_k': retrieval_k,
                         'question': question,
                         'answer': answer,
                         'num_sources': num_sources,
@@ -106,16 +112,20 @@ class RAGExperiments:
     
     # ==================== 实验2: Re-ranking (重排序) ====================
     
-    def experiment_reranking(self, use_best_chunk_size=True):
+    def experiment_reranking(self, use_best_chunk_size=True, baseline_k=3, rerank_pool_k=10, rerank_top_k=3):
         """
         实验2：测试Re-ranking对检索结果的优化
         方法：使用LLM对检索结果进行相关性重排序（采用逐个评分方法）
         
         Args:
             use_best_chunk_size: 是否使用最佳chunk_size=1024重建向量库
+            baseline_k: baseline检索文档数，默认k=3
+            rerank_pool_k: 重排序前检索的候选文档数，默认k=10
+            rerank_top_k: 重排序后保留的top-k文档数，默认k=3
         """
         print("\n" + "="*60)
         print("🔬 实验2: Re-ranking (重排序) 实验")
+        print(f"📊 Baseline k={baseline_k}, Rerank从{rerank_pool_k}中挑{rerank_top_k}个")
         print("="*60)
         
         # 如果需要使用最佳chunk_size，先重建向量库
@@ -146,38 +156,43 @@ class RAGExperiments:
             print(f"\n❓ 问题: {question}")
             print("-" * 60)
             
-            # 1. 普通检索 (k=10)
+            # 1. 普通检索 (baseline，使用自定义k)
             start_time = time.time()
-            docs_original = vector_store_manager.similarity_search(question, k=10)
+            rag_chain = RAGChain(vector_store_manager, retrieval_k=baseline_k)
+            response_original = rag_chain.get_answer_with_sources(question)
+            answer_original = response_original['answer']
             time_original = time.time() - start_time
             
-            # 2. 使用LLM进行Re-ranking（采用老师的逐个评分方法）
+            # 2. 使用LLM进行Re-ranking（先检索更多文档，再重排序取top_k）
             start_time = time.time()
-            docs_reranked = self._rerank_documents_teacher_method(question, docs_original, llm, top_k=3)
+            docs_for_rerank = vector_store_manager.similarity_search(question, k=rerank_pool_k)
+            docs_reranked = self._rerank_documents_teacher_method(question, docs_for_rerank, llm, top_k=rerank_top_k)
             time_reranked = time.time() - start_time
             
-            # 3. 分别生成答案
-            rag_chain = RAGChain(vector_store_manager)
+            # 3. 使用重排序结果生成答案（使用相同的RAGChain prompt）
+            answer_reranked = self._get_answer_with_rag_prompt(question, docs_reranked)
             
-            # 使用原始检索结果
-            answer_original = self._get_answer_from_docs(question, docs_original[:4], llm)
-            
-            # 使用重排序结果
-            answer_reranked = self._get_answer_from_docs(question, docs_reranked, llm)
+            # 检查文档顺序是否改变（对比baseline检索的文档和reranked后的文档）
+            docs_original = response_original['sources'][:rerank_top_k]  # 取前top_k个对比
+            docs_changed = self._docs_order_changed(docs_original, docs_reranked)
             
             result = {
                 'question': question,
+                'baseline_k': baseline_k,
+                'rerank_pool_k': rerank_pool_k,
+                'rerank_top_k': rerank_top_k,
                 'answer_original': answer_original,
                 'answer_reranked': answer_reranked,
                 'time_original': time_original,
                 'time_reranked': time_reranked,
-                'docs_changed': self._docs_order_changed(docs_original[:4], docs_reranked)
+                'num_sources_original': len(response_original['sources']),
+                'num_sources_reranked': len(docs_reranked),
+                'docs_changed': docs_changed
             }
             results.append(result)
             
             print(f"  原始检索: {time_original:.2f}s")
             print(f"  重排序后: {time_reranked:.2f}s")
-            print(f"  文档顺序变化: {result['docs_changed']}")
         
         # 保存结果
         df = pd.DataFrame(results)
@@ -294,12 +309,34 @@ class RAGExperiments:
             print(f"  ⚠️  重排序失败，使用原始顺序: {e}")
             return documents[:top_k]
     
-    def _get_answer_from_docs(self, question: str, docs: List, llm) -> str:
-        """根据给定文档生成答案"""
+    def _get_answer_with_rag_prompt(self, question: str, docs: List) -> str:
+        """使用与RAGChain相同的详细prompt生成答案"""
         context = "\n\n".join([doc.page_content for doc in docs])
         
+        # 使用与RAGChain完全相同的prompt
+        system_prompt = """你是一个专业的汽车知识助手。你的任务是根据提供的上下文信息回答用户的问题。
+
+回答要求：
+1. 仅根据提供的上下文信息回答问题
+2. 如果上下文中没有相关信息，请明确告知用户"根据现有资料无法回答这个问题"
+3. 回答要准确、简洁、专业
+4. 可以引用上下文中的具体内容
+5. 如果问题与汽车知识无关，请礼貌地告知用户你只能回答汽车相关的问题
+
+上下文信息：
+{context}
+"""
+        
+        # 使用与RAGChain相同的LLM配置
+        llm = ChatOpenAI(
+            model=Config.OPENAI_MODEL,
+            temperature=Config.TEMPERATURE, 
+            openai_api_key=Config.OPENAI_API_KEY,
+            openai_api_base=Config.OPENAI_API_BASE
+        )
+        
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "根据以下上下文回答问题。\n\n上下文:\n{context}"),
+            ("system", system_prompt),
             ("human", "{question}")
         ])
         
@@ -318,16 +355,18 @@ class RAGExperiments:
     
     # ==================== 实验3: Query Rewriting (查询改写) ====================
     
-    def experiment_query_rewriting(self, use_best_chunk_size=True):
+    def experiment_query_rewriting(self, use_best_chunk_size=True, retrieval_k=3):
         """
         实验3：测试Query Rewriting对检索效果的提升
         方法：使用LLM改写用户查询，使其更适合检索
         
         Args:
             use_best_chunk_size: 是否使用最佳chunk_size=1024, chunk_overlap=50重建向量库
+            retrieval_k: 检索文档数量，默认k=3
         """
         print("\n" + "="*60)
         print("🔬 实验3: Query Rewriting (查询改写) 实验")
+        print(f"📊 检索文档数 k = {retrieval_k}")
         print("="*60)
         
         # 如果需要使用最佳chunk_size，先重建向量库（控制变量）
@@ -364,29 +403,34 @@ class RAGExperiments:
             for i, rq in enumerate(rewritten_queries, 1):
                 print(f"    {i}. {rq}")
             
-            # 2. 使用原始问题检索
+            # 2. 使用原始问题检索（baseline）
             start_time = time.time()
-            docs_original = vector_store_manager.similarity_search(original_question, k=5)
+            rag_chain = RAGChain(vector_store_manager, retrieval_k=retrieval_k)
+            response_original = rag_chain.get_answer_with_sources(original_question)
+            answer_original = response_original['answer']
             time_original = time.time() - start_time
-            answer_original = self._get_answer_from_docs(original_question, docs_original, llm)
             
             # 3. 使用改写后的查询检索（多查询融合）
             start_time = time.time()
             docs_rewritten = self._multi_query_retrieval(
                 rewritten_queries, 
                 vector_store_manager, 
-                k=5
+                k=retrieval_k
             )
             time_rewritten = time.time() - start_time
-            answer_rewritten = self._get_answer_from_docs(original_question, docs_rewritten, llm)
+            # 使用相同的RAGChain prompt生成答案
+            answer_rewritten = self._get_answer_with_rag_prompt(original_question, docs_rewritten)
             
             result = {
                 'original_question': original_question,
+                'retrieval_k': retrieval_k,
                 'rewritten_queries': ' | '.join(rewritten_queries),
                 'answer_original': answer_original,
                 'answer_rewritten': answer_rewritten,
                 'time_original': time_original,
-                'time_rewritten': time_rewritten
+                'time_rewritten': time_rewritten,
+                'num_sources_original': len(response_original['sources']),
+                'num_sources_rewritten': len(docs_rewritten)
             }
             results.append(result)
             
