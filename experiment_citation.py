@@ -1,37 +1,21 @@
-"""
-实验1：带引用标注的RAG问答
-通过修改Prompt让LLM在回答时标注引用来源
-"""
-
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from config import Config
 from vector_store_manager import VectorStoreManager
 from document_processor import DocumentProcessor
 
-
+# 带引用标注的RAG问答 
+# Args:query: 用户问题 vectorstore: 向量存储实例 client: ChatOpenAI客户端 
+# Returns:answer: LLM生成的回答 retrieved_docs: 检索到的文档列表
 def rag_with_citation(query, vectorstore, client):
-    """带引用标注的RAG问答
-    
-    Args:
-        query: 用户问题
-        vectorstore: 向量存储实例
-        client: ChatOpenAI客户端
-        
-    Returns:
-        answer: LLM生成的回答
-        retrieved_docs: 检索到的文档列表
-    """
-    # 第1步：检索相关文档
+
     retrieved_docs = vectorstore.similarity_search(query, k=5)
 
-    # 第2步：构建带编号的上下文
     context_parts = []
     for i, doc in enumerate(retrieved_docs, 1):
         context_parts.append(f"[文档{i}] {doc.page_content}")
     context = "\n\n".join(context_parts)
 
-    # 第3步：用带引用要求的Prompt生成回答
     prompt = f"""基于以下参考文档回答用户的问题。
 
 要求：
@@ -47,11 +31,9 @@ def rag_with_citation(query, vectorstore, client):
 
 请回答（记得标注引用）："""
 
-    # 使用LangChain的invoke方法调用LLM
     response = client.invoke([HumanMessage(content=prompt)])
     answer = response.content
 
-    # 第4步：展示回答和引用来源
     print("=" * 60)
     print(f"问题：{query}\n")
     print(f"回答：{answer}\n")
@@ -64,19 +46,14 @@ def rag_with_citation(query, vectorstore, client):
 
 
 def run_citation_experiment():
-    """运行引用标注实验"""
     print("\n" + "="*80)
-    print("🔬 实验1: 带引用标注的RAG问答")
+    print("任务3：带引用标注的RAG问答")
     print("="*80)
     
-    # 初始化向量存储管理器
-    print("\n📚 加载向量存储...")
     vector_store_manager = VectorStoreManager()
     vector_store_manager.load_vector_store()
     vectorstore = vector_store_manager.vector_store
     
-    # 初始化LLM客户端
-    print("🤖 初始化LLM客户端...")
     client = ChatOpenAI(
         model=Config.OPENAI_MODEL,
         temperature=0,
@@ -84,7 +61,6 @@ def run_citation_experiment():
         openai_api_base=Config.OPENAI_API_BASE
     )
     
-    # 测试问题列表
     test_questions = [
         "比亚迪海豹的电池容量是多少？",
         "领克的座位配置是怎样的？",
@@ -94,14 +70,13 @@ def run_citation_experiment():
     ]
     
     print("\n" + "="*80)
-    print("开始测试带引用标注的RAG问答")
+    print("开始测试")
     print("="*80 + "\n")
     
-    # 对每个问题进行测试
     for idx, question in enumerate(test_questions, 1):
-        print(f"\n{'🔸'*40}")
+        print(f"\n{'-'*40}")
         print(f"测试 {idx}/{len(test_questions)}")
-        print(f"{'🔸'*40}\n")
+        print(f"{'-'*40}\n")
         
         answer, sources = rag_with_citation(question, vectorstore, client)
         
@@ -111,25 +86,21 @@ def run_citation_experiment():
             time.sleep(1)
     
     print("\n" + "="*80)
-    print("✅ 实验完成！")
+    print("实验完成！")
     print("="*80)
 
 
+# 交互式带引用问答模式
 def interactive_citation_mode():
-    """交互式带引用问答模式"""
     print("\n" + "="*80)
-    print("💬 交互式带引用问答模式")
+    print("交互式带引用问答模式")
     print("="*80)
     print("提示：输入 'quit' 或 'exit' 退出\n")
     
-    # 初始化向量存储管理器
-    print("📚 加载向量存储...")
     vector_store_manager = VectorStoreManager()
     vector_store_manager.load_vector_store()
     vectorstore = vector_store_manager.vector_store
     
-    # 初始化LLM客户端
-    print("🤖 初始化LLM客户端...\n")
     client = ChatOpenAI(
         model=Config.OPENAI_MODEL,
         temperature=0,
@@ -137,16 +108,16 @@ def interactive_citation_mode():
         openai_api_base=Config.OPENAI_API_BASE
     )
     
-    print("准备就绪！请输入您的问题：\n")
+    print("请输入您的问题：\n")
     
     while True:
         try:
             # 获取用户输入
-            user_input = input("👤 您的问题: ").strip()
+            user_input = input("您的问题: ").strip()
             
             # 检查退出命令
             if user_input.lower() in ['quit', 'exit', '退出']:
-                print("\n👋 再见！")
+                print("\n再见！")
                 break
             
             # 跳过空输入
@@ -159,10 +130,10 @@ def interactive_citation_mode():
             print()
             
         except KeyboardInterrupt:
-            print("\n\n👋 再见！")
+            print("\n\n再见！")
             break
         except Exception as e:
-            print(f"\n❌ 错误: {str(e)}\n")
+            print(f"\n错误: {str(e)}\n")
 
 
 if __name__ == "__main__":
