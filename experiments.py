@@ -306,7 +306,7 @@ class RAGExperiments:
             return reranked_docs
             
         except Exception as e:
-            print(f"  ⚠️  重排序失败，使用原始顺序: {e}")
+            print(f"重排序失败，使用原始顺序: {e}")
             return documents[:top_k]
     
     def _get_answer_with_rag_prompt(self, question: str, docs: List) -> str:
